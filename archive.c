@@ -1,11 +1,9 @@
 #include "archive.h"
 #include "arch_decs.h"
 
-void printbin(short p, int len);
 
 void archive(char *fnames[], int fnames_len) {
 	struct prog_mode program_mode;
-	struct stat finfo;
 
 	Memdir root, *dlistp;
 	Memfile *flistp;
@@ -53,61 +51,53 @@ int last_dir_oset(char *dname) {
 void write_dir_meta(IOBUF *arch_fp, Memdir *mdp) {
 	if (arch_fp == NULL || mdp == NULL) return;
 
+	OFFSET_SIZE savedpos;
 	Memfile *flistp;
 	Memdir *dlistp;
-	long savedpos;
 	IOBUF *fp;
 	char c;
 	int i;
 
 	OFFSET_LIST offset_list = sizeof (OFFSET_SIZE) * (mdp->nfiles + mdp->ndirs);
-	printf("\nEntered write_dir_meta with mdp->name = %s\n", mdp->name);
 
-	printf("wrote %ld bytes of name %s\n", bwrites(arch_fp, mdp->name, cstrlen(mdp->name) + 1), mdp->name);
-	printf("wrote %ld bytes of perms\n",bwrites(arch_fp, (char *) &mdp->perms, PERMS_SIZE));
-	printf("wrote %ld bytes of offset_list\n", bwrites(arch_fp, (char *) &offset_list, sizeof offset_list));
+	bwrites(arch_fp, mdp->name, cstrlen(mdp->name) + 1);
+	bwrites(arch_fp, (char *) &mdp->perms, PERMS_SIZE);
+	bwrites(arch_fp, (char *) &offset_list, sizeof offset_list);
 
-	printf("looping thru dirs of %s\n", mdp->name);
 	for (dlistp = mdp->dlist; dlistp - mdp->dlist < mdp->ndirs; dlistp++) {
-		printf("wrote %ld bytes of offset %lu. Seeking there now.\n", bwrites(arch_fp, (char *) &dlistp->offset, sizeof dlistp->offset), dlistp->offset);
+		bwrites(arch_fp, (char *) &dlistp->offset, sizeof dlistp->offset);
 
 		savedpos = btell(arch_fp);
-		if (savedpos != dlistp->offset) {
-			printf("btw current position is %lu\n", savedpos);
+		if (savedpos != dlistp->offset)
 			bseek(arch_fp, dlistp->offset, 0);
-		}
 
 		write_dir_meta(arch_fp, dlistp);
-		if (savedpos != dlistp->offset) {
+
+		if (savedpos != dlistp->offset)
 			bseek(arch_fp, savedpos, 0);
-			printf("seeking back to %lu\n", savedpos);
-		}
 	}
 	for (flistp = mdp->flist; flistp - mdp->flist < mdp->nfiles; flistp++) {
-		printf("wrote %ld bytes of fileoffset %lu. Seeking there now.\n", bwrites(arch_fp, (char *) &file_offset, sizeof file_offset), file_offset);
+		bwrites(arch_fp, (char *) &file_offset, sizeof file_offset);
 
 		savedpos = btell(arch_fp);
-		printf("btw current position is %lu\n", savedpos);
 		bseek(arch_fp, file_offset, 0);
 
 		i = last_dir_oset(flistp->name);
-		printf("wrote %ld bytes of file name %s", bwrites(arch_fp, flistp->name + i, cstrlen(flistp->name + i) + 1), flistp->name);
-		printf("wrote %ld bytes of perms", bwrites(arch_fp, (char *) &flistp->perms, PERMS_SIZE));
-		printf("wrote %ld bytes of file size %lu\n", bwrites(arch_fp, (char *) &flistp->size, sizeof flistp->size), flistp->size);
+		bwrites(arch_fp, flistp->name + i, cstrlen(flistp->name + i) + 1);
+		bwrites(arch_fp, (char *) &flistp->perms, PERMS_SIZE);
+		bwrites(arch_fp, (char *) &flistp->size, sizeof flistp->size);
 
 		if ((fp = bopen(flistp->name, IOBM_RO)) == NULL) {
-			printf("could not open file %s for reading. Skipping it.\n", flistp->name);
-			continue;
+			printf("Error: could not open file %s for reading.\n", flistp->name);
+			return;
 		}
-		printf("opened buffer with for file %s\n", fp->name);
+
 		while((c = readc(fp)) != EOF)
 			writec(arch_fp, c);
 		bclose(fp);
-		printf("copied and closed the buffer for file %s\n", fp->name);
 
 		file_offset += cstrlen(flistp->name + i) + 1 + PERMS_SIZE + sizeof flistp->size + flistp->size;
 		bseek(arch_fp, savedpos, 0);
-		printf("seeking back to %lu\n", savedpos);
 	}	
 }
 
@@ -121,7 +111,7 @@ int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 	char **p, *namep, c;
 	long savedpos;
 	DIR *dp;
-	int i, fd;
+	int i;
 
 	mdp->offset = dirs_size + sizeof (DIRS_SIZE);
 
@@ -158,9 +148,6 @@ int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 		dirs_size += 8;
 
 		mdp->perms |= ROOT_DIR_PERMS;
-		// mdp->perms = mdp->perms >> 7;
-		printf("perms for %s:\n", mdp->name);
-		printbin(mdp->perms, 9);
 
 		i = program_mode->content.files.len;
 		p = program_mode->content.files.p;
@@ -191,9 +178,6 @@ int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 		}
 
 		mdp->perms |= (S_IRWXU | S_IRWXG | S_IRWXO) & finfo.st_mode;
-		// mdp->perms = mdp->perms >> 7;
-		printf("perms for %s:\n", program_mode->content.dname);
-		printbin(mdp->perms, 9);
 
 		namep = program_mode->content.dname + last_dir_oset(program_mode->content.dname);
 		i = cstrlen(namep) + 1;
@@ -247,7 +231,6 @@ void cseekdir(DIR *dp, long nentrs) {
 
 int create_frec(char *name, Memfile *mfp) {
 	struct stat finfo;
-	int i;
 
 	if (stat(name, &finfo) < 0) {
 		printf("File \"%s\" does not exist. [Error code %d]\n", name, errno);
@@ -261,9 +244,6 @@ int create_frec(char *name, Memfile *mfp) {
 
 	mfp->perms = 0;
 	mfp->perms |= (S_IRWXU | S_IRWXG | S_IRWXO) & finfo.st_mode;
-	// mfp->perms = mfp->perms >> 7;
-	printf("perms for %s\n", name);
-	printbin(mfp->perms, 9);
 
 	mfp->size = finfo.st_size;
 
@@ -275,7 +255,7 @@ void append_file_counts(struct prog_mode *program_mode, Memdir *memdir) {
 	struct dirent *dent;
 	struct stat finfo;
 	DIR *dp;
-	char **p, *namep;
+	char **p;
 	int i;
 
 	memdir->nfiles = memdir->ndirs = 0;
@@ -303,7 +283,6 @@ void append_file_counts(struct prog_mode *program_mode, Memdir *memdir) {
 			return;
 		}
 		while ((dent = readdir(dp)) != NULL) {
-			printf("=== Found file %s\n", dent->d_name);
 			if (faccessat(dp->__dd_fd, dent->d_name, R_OK, AT_SYMLINK_NOFOLLOW) < 0) {
 				printf("could not open %s/%s. This file will be skipped. Using 'sudo' may help. [Error code %d]\n", program_mode->content.dname, dent->d_name, errno);
 				continue;
@@ -328,11 +307,4 @@ void free_mdp(Memdir *mdp) {
 
 void clearbuf(char *buf, int len) {
 	while (len-- > 0) *buf++ = 0;
-}
-
-void printbin(short p, int len) {
-	int i;
-	for (i = len - 1; i >= 0; i--)
-		printf("%d", (p >> i) & 1);
-	printf("\n");
 }

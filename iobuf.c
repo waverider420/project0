@@ -126,13 +126,8 @@ off_t bseek(IOBUF *fp, long offset, int origin) {
 
 long breads(IOBUF *fp, char *p, long len) {
 	char *start;
-	int c;
 
 	for (start = p; len-- > 0; *p++ = readc(fp));
-/*
-		if ((c = readc(fp)) != EOF) *p = c;
-		else break;
-*/
 	return p - start;
 }
 

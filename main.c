@@ -13,7 +13,6 @@ int main(int argc, char *argv[]) {
 
 	while (--argc > 0 && **++argv == '-') switch (*++*argv) {
 		case 'e':
-			printf("Extract mode.\n");
 			program_mode = PM_EXT;
 			break;
 		default:
@@ -28,7 +27,9 @@ int main(int argc, char *argv[]) {
 	if (program_mode & PM_ARC)
 		archive(argv, argc);
 	else if (program_mode & PM_EXT)
-		while (argc-- > 0)
+		while (argc-- > 0) {
+			printf("Extracting %s\n", *argv);
 			extract(*argv++);
+		}
 	return 0;
 }
