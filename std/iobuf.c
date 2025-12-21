@@ -3,6 +3,34 @@
 
 unsigned open_file_count = 0;
 
+IOBUF _bstdin = {
+	.name  	= "stdin",
+	.fd 	= 0,
+	.cleft 	= 0,
+	.bufp	= _bstdin.buf,
+	.mode	= {0, 1, 0, 0},
+	.info 	= {0}
+};
+
+IOBUF _bstdout = {
+	.name  	= "stdout",
+	.fd 	= 1,
+	.cleft 	= 0,
+	.bufp	= _bstdout.buf,
+	.mode	= {1, 0, 0, 0},
+	.info 	= {0}
+};
+
+IOBUF _bstderr = {
+	.name  	= "stderr",
+	.fd 	= 2,
+	.cleft 	= 0,
+	.bufp	= _bstderr.buf,
+	.mode	= {0, 1, 0, 0},
+	.info 	= {0}
+};
+
+
 IOBUF *bopen(char *fname, char mode) {
 	struct stat finfo;
 	int o_mode;
@@ -65,7 +93,7 @@ int _fillbuf(IOBUF *fp) {
 	return *fp->bufp++;
 }
 
-static int _flushbuf(IOBUF *fp) {
+int _flushbuf(IOBUF *fp) {
 	if (fp == NULL) return EOF;
 	if (!(fp->mode.is_write) || fp->mode.is_err) {
 		errno = 1;

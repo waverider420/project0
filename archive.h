@@ -25,8 +25,9 @@ OFFSET_LIST = n offsets * OFFSET_SIZE
 #include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
-#include "iobuf.h"
-#include "std.h"
+
+#include "std/iobuf.h"
+#include "std/std.h"
 
 #define DIRS_SIZE 	unsigned int
 #define FILE_SIZE	unsigned long

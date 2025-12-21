@@ -1,10 +1,10 @@
 #ifndef IOBUF_H
 #define IOBUF_H
 
-#include <stdlib.h>
 #include <sys/stat.h>
-#include <stdio.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
 #include "std.h"
@@ -39,6 +39,14 @@ typedef struct iobuf {
 	struct stat info;
 } IOBUF;
 
+extern IOBUF _bstdin;
+extern IOBUF _bstdout;
+extern IOBUF _bstderr;
+
+#define bstdin  &_bstdin
+#define bstdout &_bstdout
+#define bstderr &_bstderr
+
 #define readc(fp) ((fp)->cleft-- > 0 ? *(fp)->bufp++ : _fillbuf(fp))
 #define writec(fp, c) ((fp)->cleft-- > 0 ? *(fp)->bufp++ = (c) : _flushbufc(fp, c))
 #define writeline(fd, lineptr) (write((fd), lineptr, cstrlen(lineptr))
@@ -48,6 +56,7 @@ typedef struct iobuf {
 
 IOBUF *bopen(char *, char);
 int _fillbuf(IOBUF *);
+int _flushbuf(IOBUF *);
 int _flushbufc(IOBUF *, char);
 void bclose(IOBUF *);
 off_t btell(IOBUF *);
