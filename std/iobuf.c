@@ -1,7 +1,6 @@
 #include "iobuf.h"
-#include <stdio.h>
 
-unsigned open_file_count = 0;
+unsigned open_file_count = 3;
 
 IOBUF _bstdin = {
 	.name  	= "stdin",
@@ -26,7 +25,7 @@ IOBUF _bstderr = {
 	.fd 	= 2,
 	.cleft 	= 0,
 	.bufp	= _bstderr.buf,
-	.mode	= {0, 1, 0, 0},
+	.mode	= {1, 0, 0, 0},
 	.info 	= {0}
 };
 
@@ -45,10 +44,7 @@ IOBUF *bopen(char *fname, char mode) {
 	else return NULL;
 
 	if ((fd = open(fname, o_mode, perms)) < 0) return NULL;
-	if (fstat(fd, &finfo) < 0) {
-		close(fd);
-		return NULL;
-	}
+	fstat(fd, &finfo);
 	if ((fp = (IOBUF *) malloc(sizeof (IOBUF))) == NULL) {
 		close(fd);
 		return NULL;
@@ -122,7 +118,7 @@ void bclose(IOBUF *fp) {
 	if (fp->mode.is_write)
 		_flushbuf(fp);
 	close(fp->fd);
-	free(fp->name);
+	if (fp->name != NULL) free(fp->name);
 	free(fp);
 	open_file_count--;
 }

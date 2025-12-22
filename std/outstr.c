@@ -5,7 +5,7 @@
 int outputstr(IOBUF *fp, char *fmt, ...) {
 	va_list ap;
 	char *reader;
-	char *sval, *p;
+	char *sval;
 	int dval;
 
 	va_start(ap, fmt);

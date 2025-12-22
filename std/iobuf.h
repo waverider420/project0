@@ -4,7 +4,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <fcntl.h>
 #include <errno.h>
 #include "std.h"
@@ -51,8 +50,8 @@ extern IOBUF _bstderr;
 #define writec(fp, c) ((fp)->cleft-- > 0 ? *(fp)->bufp++ = (c) : _flushbufc(fp, c))
 #define writeline(fd, lineptr) (write((fd), lineptr, cstrlen(lineptr))
 
-/* Funfction declarations */
 
+/* Funfction declarations */
 
 IOBUF *bopen(char *, char);
 int _fillbuf(IOBUF *);

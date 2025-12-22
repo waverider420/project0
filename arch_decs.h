@@ -20,10 +20,10 @@ static DIRS_SIZE dirs_size = 0;
 OFFSET_SIZE file_offset = 0;
 
 int last_dir_oset(char *);
-void write_dir_meta(IOBUF *, Memdir *);
-int create_drec(struct prog_mode *, Memdir *);
+int write_dir_meta(IOBUF *, Memdir *);
+void create_drec(struct prog_mode *, Memdir *);
 void cseekdir(DIR *, long);
-int create_frec(char *, Memfile *);
+void create_frec(char *, Memfile *);
 void write_perms(char *, struct stat *);
 void append_file_counts(struct prog_mode *, Memdir *);
 void free_mdp(Memdir *);

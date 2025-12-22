@@ -5,32 +5,26 @@
 void archive(char *fnames[], int fnames_len) {
 	struct prog_mode program_mode;
 
-	Memdir root, *dlistp;
-	Memfile *flistp;
+	Memdir root;
 
 	program_mode.mode		= M_TREE_INIT;
 	program_mode.content.files.p	= fnames;
 	program_mode.content.files.len	= fnames_len;
 
-	if (create_drec(&program_mode, &root) < 0) {
-		printf("Internal error\n");
-
-		/* Free memory */
-		if (root.name != NULL) free(root.name);
-		for (dlistp = root.dlist; dlistp - root.dlist < root.ndirs; free_mdp(dlistp++));
-		for (flistp = root.flist; flistp - root.flist < root.nfiles; free(flistp++));
-		return;
-	}
+	create_drec(&program_mode, &root);
 
 	IOBUF *arch_fp;
 	if ((arch_fp = bopen("archive.qarch", IOBM_WO)) == NULL) {
-		printf("error: couldn't open file for writing. [Error code %d]\n", errno);
-		return;
+		outputstr(bstderr, ER_CREATE, "archive.qarch"); exit(EXIT_FAILURE);
 	}
 
 	bwrites(arch_fp, (char *) &dirs_size, sizeof dirs_size);
 	file_offset = dirs_size + sizeof (DIRS_SIZE);
-	write_dir_meta(arch_fp, &root);
+	if (write_dir_meta(arch_fp, &root) < 0) {
+		outputstr(bstderr, "An error occured while writing.\n");
+		unlink(arch_fp->name);
+		exit(EXIT_FAILURE);
+	}
 
 	bclose(arch_fp);
 }
@@ -48,8 +42,8 @@ int last_dir_oset(char *dname) {
 	} else return dnamep - dname + 1;
 }
 
-void write_dir_meta(IOBUF *arch_fp, Memdir *mdp) {
-	if (arch_fp == NULL || mdp == NULL) return;
+int write_dir_meta(IOBUF *arch_fp, Memdir *mdp) {
+	if (arch_fp == NULL || mdp == NULL) return -1;
 
 	OFFSET_SIZE savedpos;
 	Memfile *flistp;
@@ -60,36 +54,36 @@ void write_dir_meta(IOBUF *arch_fp, Memdir *mdp) {
 
 	OFFSET_LIST offset_list = sizeof (OFFSET_SIZE) * (mdp->nfiles + mdp->ndirs);
 
-	bwrites(arch_fp, mdp->name, cstrlen(mdp->name) + 1);
-	bwrites(arch_fp, (char *) &mdp->perms, PERMS_SIZE);
-	bwrites(arch_fp, (char *) &offset_list, sizeof offset_list);
+	if (bwrites(arch_fp, mdp->name, cstrlen(mdp->name) + 1) != cstrlen(mdp->name) + 1) 	return -1;
+	if (bwrites(arch_fp, (char *) &mdp->perms, PERMS_SIZE) != PERMS_SIZE) 			return -1;
+	if (bwrites(arch_fp, (char *) &offset_list, sizeof offset_list) != sizeof offset_list)  return -1;
 
 	for (dlistp = mdp->dlist; dlistp - mdp->dlist < mdp->ndirs; dlistp++) {
-		bwrites(arch_fp, (char *) &dlistp->offset, sizeof dlistp->offset);
+		if (bwrites(arch_fp, (char *) &dlistp->offset, sizeof dlistp->offset) != sizeof dlistp->offset) return -1;
 
 		savedpos = btell(arch_fp);
 		if (savedpos != dlistp->offset)
 			bseek(arch_fp, dlistp->offset, 0);
 
-		write_dir_meta(arch_fp, dlistp);
+		if (write_dir_meta(arch_fp, dlistp) < 0) return -1;
 
 		if (savedpos != dlistp->offset)
 			bseek(arch_fp, savedpos, 0);
 	}
 	for (flistp = mdp->flist; flistp - mdp->flist < mdp->nfiles; flistp++) {
-		bwrites(arch_fp, (char *) &file_offset, sizeof file_offset);
+		if (bwrites(arch_fp, (char *) &file_offset, sizeof file_offset) != sizeof file_offset) return -1;
 
 		savedpos = btell(arch_fp);
 		bseek(arch_fp, file_offset, 0);
 
 		i = last_dir_oset(flistp->name);
-		bwrites(arch_fp, flistp->name + i, cstrlen(flistp->name + i) + 1);
-		bwrites(arch_fp, (char *) &flistp->perms, PERMS_SIZE);
-		bwrites(arch_fp, (char *) &flistp->size, sizeof flistp->size);
+		if (bwrites(arch_fp, flistp->name + i, cstrlen(flistp->name + i) + 1) != cstrlen(flistp->name + i) + 1) return -1;
+		if (bwrites(arch_fp, (char *) &flistp->perms, PERMS_SIZE) != PERMS_SIZE) 				return -1;
+		if (bwrites(arch_fp, (char *) &flistp->size, sizeof flistp->size) != sizeof flistp->size) 		return -1;
 
 		if ((fp = bopen(flistp->name, IOBM_RO)) == NULL) {
-			printf("Error: could not open file %s for reading.\n", flistp->name);
-			return;
+			outputstr(bstderr, ER_OPEN, flistp->name);
+			return -1;
 		}
 
 		while((c = readc(fp)) != EOF)
@@ -98,10 +92,12 @@ void write_dir_meta(IOBUF *arch_fp, Memdir *mdp) {
 
 		file_offset += cstrlen(flistp->name + i) + 1 + PERMS_SIZE + sizeof flistp->size + flistp->size;
 		bseek(arch_fp, savedpos, 0);
-	}	
+	}
+
+	return 0;
 }
 
-int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
+void create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 	struct dirent *dent;
 	struct stat finfo;
 
@@ -127,22 +123,19 @@ int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 	dirs_size += sizeof (OFFSET_LIST) + (mdp->nfiles + mdp->ndirs) * sizeof (OFFSET_SIZE);
 	if (mdp->nfiles > 0) {
 		if ((mdp->flist = flistp = (Memfile *) malloc(sizeof (Memfile) * mdp->nfiles)) == NULL) {
-			printf("error: create_drec: can't allocate space.\n");
-			return -1;
+			outputstr(bstderr, ER_MALLOC); exit(EXIT_FAILURE);
 		}
 	} else mdp->flist = flistp = NULL;
 
 	if (mdp->ndirs > 0) {
 		if ((mdp->dlist = dlistp = (Memdir *) malloc(sizeof (Memdir) * mdp->ndirs)) == NULL) {
-			printf("error: create_drec: can't allocate space.\n");
-			return -1;
+			outputstr(bstderr, ER_MALLOC); exit(EXIT_FAILURE);
 		}
 	} else mdp->dlist = dlistp = NULL;
 
 	if (program_mode->mode == M_TREE_INIT) {
 		if ((mdp->name = malloc(8)) == NULL) {
-			printf("error: can't allocate space.\n");
-			return -1;
+			outputstr(bstderr, ER_MALLOC); exit(EXIT_FAILURE);
 		}
 		cstrcpy(mdp->name, "Extract");
 		dirs_size += 8;
@@ -157,26 +150,16 @@ int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 			if (faccessat(AT_FDCWD, *p, R_OK, AT_SYMLINK_NOFOLLOW) < 0) continue;
 			stat(*p, &finfo);
 			if (S_ISREG(finfo.st_mode)) {
-				if (create_frec(*p, flistp) < 0) {
-					printf("Internal error.\n");
-					return -1;
-				}
+				create_frec(*p, flistp);
 				flistp++;
 			} else if (S_ISDIR(finfo.st_mode)) {
 				cstrcpy(program_mode->content.dname, *p);
-				if (create_drec(program_mode, dlistp++) < 0) {
-					printf("Internal error.\n");
-					return -1;
-				}
+				create_drec(program_mode, dlistp++);
 				dlistp++;
 			}
 		}
 	} else if (program_mode->mode == M_TREE_CLAS) {
-		if (stat(program_mode->content.dname, &finfo) < 0 || (dp = opendir(program_mode->content.dname)) == NULL) {
-			printf("create_drec: error: can't open %s. [Error code %d]\n", program_mode->content.dname, errno);
-			return -1;
-		}
-
+		stat(program_mode->content.dname, &finfo);
 		mdp->perms |= (S_IRWXU | S_IRWXG | S_IRWXO) & finfo.st_mode;
 
 		namep = program_mode->content.dname + last_dir_oset(program_mode->content.dname);
@@ -184,8 +167,7 @@ int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 
 		if ((c = (cstrncmp(namep, ".", 1) == 0 || cstrncmp(namep, "..", 2) == 0))) i++;
 		if ((mdp->name = (char *) malloc(i)) == NULL) {
-			printf("error: create_frec: can't allocate space.\n");
-			return -1;
+			outputstr(bstderr, ER_MALLOC); exit(EXIT_FAILURE);
 		}
 
 		*mdp->name = '\0';
@@ -195,6 +177,7 @@ int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 
 		namep = program_mode->content.dname + cstrlen(program_mode->content.dname);
 
+		dp = opendir(program_mode->content.dname);
 		for (savedpos = 0; (dent = readdir(dp)) != NULL; savedpos++) {
 			joinpath(program_mode->content.dname, dent->d_name);
 			if (faccessat(dp->__dd_fd, dent->d_name, R_OK, AT_SYMLINK_NOFOLLOW) < 0) {
@@ -202,16 +185,11 @@ int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 				continue;
 			}
 			if (dent->d_type & DT_REG) {
-				if (create_frec(program_mode->content.dname, flistp++) < 0) {
-					printf("Internal error.\n");
-					return -1;
-				}
+				create_frec(program_mode->content.dname, flistp++);
 			} else if (dent->d_type & DT_DIR && NOT_SPECIAL_DIR(dent->d_name)) {
 				closedir(dp);
-				if (create_drec(program_mode, dlistp++) < 0) {
-					printf("Internal error.\n");
-					return -1;
-				}
+				create_drec(program_mode, dlistp++);
+
 				*namep = '\0';
 				dp = opendir(program_mode->content.dname);
 				cseekdir(dp, savedpos);
@@ -220,8 +198,6 @@ int create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 		}
 		closedir(dp);
 	}
-
-	return 0;
 }
 
 void cseekdir(DIR *dp, long nentrs) {
@@ -229,25 +205,19 @@ void cseekdir(DIR *dp, long nentrs) {
 	while ((readdir(dp) != NULL) && nentrs--);
 }
 
-int create_frec(char *name, Memfile *mfp) {
+void create_frec(char *name, Memfile *mfp) {
 	struct stat finfo;
 
 	if (stat(name, &finfo) < 0) {
-		printf("File \"%s\" does not exist. [Error code %d]\n", name, errno);
-		return -1;
-	}
+		outputstr(bstderr, ER_OPEN, name); exit(EXIT_FAILURE); }
 	if ((mfp->name = (char *) malloc(cstrlen(name) + 1)) == NULL) {
-		printf("error: create_frec: can't allocate space.\n");
-		return -1;
-	}
+		outputstr(bstderr, ER_MALLOC); exit(EXIT_FAILURE); }
 	cstrcpy(mfp->name, name);
 
 	mfp->perms = 0;
 	mfp->perms |= (S_IRWXU | S_IRWXG | S_IRWXO) & finfo.st_mode;
 
 	mfp->size = finfo.st_size;
-
-	return 0;
 }
 
 
@@ -265,12 +235,11 @@ void append_file_counts(struct prog_mode *program_mode, Memdir *memdir) {
 		p = program_mode->content.files.p; 
 		while (i-- > 0) {
 			if (faccessat(AT_FDCWD, *p, R_OK, AT_SYMLINK_NOFOLLOW) < 0) {
-				printf("could not open %s. This file will be skipped. Using 'sudo' may help. [Error code %d]\n", *p, errno);
+				outputstr(bstderr, "Error accessing *s. This file will be skipped. Running the program with 'sudo' may resolve this.\n", *p);
 				continue;
 			}
 			if (stat(*p++, &finfo) < 0) {
-				printf("error: can't open file %s\n", *p);
-				return;
+				outputstr(bstderr, ER_OPEN, *(p - 1)); exit(EXIT_FAILURE);
 			}
 			if (S_ISREG(finfo.st_mode))
 				memdir->nfiles++;
@@ -279,12 +248,11 @@ void append_file_counts(struct prog_mode *program_mode, Memdir *memdir) {
 		}
 	} else if (program_mode->mode == M_TREE_CLAS) {
 		if ((dp = opendir(program_mode->content.dname)) == NULL) {
-			printf("can't open %s. [Error code %d]\n", program_mode->content.dname, errno);
-			return;
+			outputstr(bstderr, ER_OPEN, program_mode->content.dname); exit(EXIT_FAILURE);
 		}
 		while ((dent = readdir(dp)) != NULL) {
 			if (faccessat(dp->__dd_fd, dent->d_name, R_OK, AT_SYMLINK_NOFOLLOW) < 0) {
-				printf("could not open %s/%s. This file will be skipped. Using 'sudo' may help. [Error code %d]\n", program_mode->content.dname, dent->d_name, errno);
+				outputstr(bstderr, "Error accessing *s/*s. This file will be skipped. Running the program with 'sudo' may resolve this.\n", program_mode->content.dname, dent->d_name);
 				continue;
 			}
 			if (dent->d_type & DT_REG)
@@ -294,15 +262,6 @@ void append_file_counts(struct prog_mode *program_mode, Memdir *memdir) {
 		}
 		closedir(dp);
 	}
-}
-
-void free_mdp(Memdir *mdp) {
-	Memdir *dlistp;
-	Memfile *flistp;
-
-	if (mdp->name != NULL) free(mdp->name);
-	for (dlistp = mdp->dlist; dlistp - mdp->dlist < mdp->ndirs; free_mdp(dlistp++));
-	for (flistp = mdp->flist; flistp - mdp->flist < mdp->nfiles; free(flistp++));
 }
 
 void clearbuf(char *buf, int len) {

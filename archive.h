@@ -26,8 +26,7 @@ OFFSET_LIST = n offsets * OFFSET_SIZE
 #include <stdio.h>
 #include <fcntl.h>
 
-#include "std/iobuf.h"
-#include "std/std.h"
+#include "std/outstr.h"
 
 #define DIRS_SIZE 	unsigned int
 #define FILE_SIZE	unsigned long
@@ -35,7 +34,15 @@ OFFSET_LIST = n offsets * OFFSET_SIZE
 #define OFFSET_SIZE	unsigned long
 #define PERMS_SIZE	2
 
+/* Error messages */
+#define ER_ACCESS_SKIP	"Error accessing *s. This file will be skipped. Running the program with 'sudo' may resolve this.\n"
+#define ER_SET_PERMS	"Can't set permissions for file *s. This error is ignored.\n"
+#define ER_MALLOC 	"Error allocating memory. Sure you have enough free RAM?\n"
+#define ER_CORRUPT	"Can't read *s; the archive is likely corrupted.\n"
+#define ER_OPEN		"Error opening *s. Does it exist?\n"
+#define ER_CREATE	"Error creating file *s\n"
 
+/* Structs */
 typedef struct _memdir {
 	char *name;
 	unsigned short perms;
