@@ -1,9 +1,11 @@
-#define M_TREE_INIT 0 /* Used for initializing a tree (root) */
-#define M_TREE_CLAS 1 /* Used for recording the remaining branches of a tree */
+#define M_TREE_INIT 	0 /* Used for initializing a tree (root) */
+#define M_TREE_CLAS 	1 /* Used for recording the remaining branches of a tree */
 
-#define ROOT_DIR_PERMS 0777
+#define PROG_EXT	".taro"
+#define PROG_EXT_LEN	5
 
-#define NOT_SPECIAL_DIR(dname) (cstrcmp(dname, ".") != 0 && cstrcmp(dname, "..") != 0)
+#define ROOT_DIR_PERMS 		0777
+#define NOT_SPECIAL_DIR(dname) 	(cstrcmp(dname, ".") != 0 && cstrcmp(dname, "..") != 0)
 
 struct prog_mode {
 	char mode;

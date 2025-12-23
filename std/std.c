@@ -92,3 +92,10 @@ long c_atoi(char *s, long len) {
 
 	return result * sign;
 }
+
+int findchar(char *s, char c) {
+	char *start;
+	for (start = s; *s != c && *s != '\0'; s++);
+
+	return (*s == '\0') ? -1 : s - start;
+}

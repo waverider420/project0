@@ -25,22 +25,21 @@ int main(int argc, char *argv[]) {
 			outputstr(bstdout, "Unknown argument: *s. Help is available with *s -h\n", *argv, prog_name);
 			return 0;
 	}
-	if (argc <= 0) {
-		outputstr(bstderr, "No files specified\n");
-		exit(EXIT_FAILURE);
+	if ((program_mode == PM_ARC && argc <= 1) || (program_mode == PM_EXT && argc < 0)) {
+		outputstr(bstderr, "No files specified\n"); exit(EXIT_FAILURE);
 	}
 
 	if (program_mode & PM_ARC)
 		archive(argv, argc);
 	else if (program_mode & PM_EXT)
 		while (argc-- > 0) {
-			extract(*argv++);
-			outputstr(bstdout, "Extracted *s\n", *argv);
+			extract(*argv);
+			outputstr(bstdout, "Extracted *s\n", *argv++);
 		}
 
 	return 0;
 }
 
 void print_usage_info(char *prog_name) {
-	outputstr(bstdout, "Of course, here's some help:\nTo archive files and directories:\n\t*s [file(s)]\n\nTo extract an archive file:\n\t*s -e [archive_name]\n\nTo get out of the Matrix, you have to revert your brain back to factory settings and stop outsourcing thought.\n", prog_name, prog_name);
+	outputstr(bstdout, "Of course, here's some help:\nTo archive files and directories:\n\t*s [archive name] [file(s)]\n\nTo extract an archive file:\n\t*s -e [archive_name(s)]\n\nTo get out of the Matrix, you have to revert your brain back to factory settings and stop outsourcing thought.\n", prog_name, prog_name);
 }

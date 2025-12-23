@@ -12,5 +12,6 @@ long cnumlen(long);
 void joinpath(char *, char *);
 char *i2s(long);
 long catoi(char *, long);
+int findchar(char *, char);
 
 #endif

@@ -4,19 +4,30 @@
 
 void archive(char *fnames[], int fnames_len) {
 	struct prog_mode program_mode;
+	int i;
 
+	/* Initialize the root record */
 	Memdir root;
+	i = cstrlen(*fnames);
+	if ((root.name = (char *) malloc(i + PROG_EXT_LEN + 1)) == NULL) {
+		outputstr(bstderr, ER_MALLOC); exit(EXIT_FAILURE);
+	}
+
+	cstrcpy(root.name, *fnames);
+	dirs_size += i + 1;
 
 	program_mode.mode		= M_TREE_INIT;
-	program_mode.content.files.p	= fnames;
-	program_mode.content.files.len	= fnames_len;
+	program_mode.content.files.p	= fnames + 1;
+	program_mode.content.files.len	= fnames_len - 1;
 
 	create_drec(&program_mode, &root);
 
 	IOBUF *arch_fp;
-	if ((arch_fp = bopen("archive.qarch", IOBM_WO)) == NULL) {
-		outputstr(bstderr, ER_CREATE, "archive.qarch"); exit(EXIT_FAILURE);
+	cstrcat(root.name, PROG_EXT);
+	if ((arch_fp = bopen(root.name, IOBM_WO)) == NULL) {
+		outputstr(bstderr, ER_CREATE, root.name); exit(EXIT_FAILURE);
 	}
+	*(root.name + i)  = '\0';
 
 	bwrites(arch_fp, (char *) &dirs_size, sizeof dirs_size);
 	file_offset = dirs_size + sizeof (DIRS_SIZE);
@@ -111,7 +122,6 @@ void create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 
 	mdp->offset = dirs_size + sizeof (DIRS_SIZE);
 
-	mdp->name  = NULL;
 	mdp->flist = NULL;
 	mdp->dlist = NULL;
 
@@ -134,12 +144,6 @@ void create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 	} else mdp->dlist = dlistp = NULL;
 
 	if (program_mode->mode == M_TREE_INIT) {
-		if ((mdp->name = malloc(8)) == NULL) {
-			outputstr(bstderr, ER_MALLOC); exit(EXIT_FAILURE);
-		}
-		cstrcpy(mdp->name, "Extract");
-		dirs_size += 8;
-
 		mdp->perms |= ROOT_DIR_PERMS;
 
 		i = program_mode->content.files.len;
@@ -165,7 +169,7 @@ void create_drec(struct prog_mode *program_mode, Memdir *mdp) {
 		namep = program_mode->content.dname + last_dir_oset(program_mode->content.dname);
 		i = cstrlen(namep) + 1;
 
-		if ((c = (cstrncmp(namep, ".", 1) == 0 || cstrncmp(namep, "..", 2) == 0))) i++;
+		if ((c = (cstrcmp(namep, ".") == 0 || cstrcmp(namep, "..") == 0))) i++;
 		if ((mdp->name = (char *) malloc(i)) == NULL) {
 			outputstr(bstderr, ER_MALLOC); exit(EXIT_FAILURE);
 		}
@@ -238,9 +242,9 @@ void append_file_counts(struct prog_mode *program_mode, Memdir *memdir) {
 				outputstr(bstderr, "Error accessing *s. This file will be skipped. Running the program with 'sudo' may resolve this.\n", *p);
 				continue;
 			}
-			if (stat(*p++, &finfo) < 0) {
-				outputstr(bstderr, ER_OPEN, *(p - 1)); exit(EXIT_FAILURE);
-			}
+			if (stat(*p, &finfo) < 0) {
+				outputstr(bstderr, ER_OPEN, *p); exit(EXIT_FAILURE);
+			} else p++;
 			if (S_ISREG(finfo.st_mode))
 				memdir->nfiles++;
 			else if (S_ISDIR(finfo.st_mode))

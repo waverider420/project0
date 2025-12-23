@@ -8,8 +8,7 @@ void extract(char *arch_name) {
 	int fd;
 
 	if ((arch_fp = bopen(arch_name, IOBM_RO)) == NULL) {
-		outputstr(bstderr, ER_OPEN, arch_name);
-		exit(EXIT_FAILURE);
+		outputstr(bstderr, ER_OPEN, arch_name); exit(EXIT_FAILURE);
 	}
 
 	arch_size = arch_fp->info.st_size;
